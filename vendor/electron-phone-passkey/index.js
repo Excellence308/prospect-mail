@@ -55,7 +55,7 @@ function createPhonePasskeySupport({ electron, helperPath, extraOrigins = [] }) 
     const showQr = (svg) => {
       if (!prompt) {
         prompt = new BrowserWindow({
-          width: 430, height: 555, resizable: false, show: false,
+          width: 430, height: 620, resizable: false, show: false,
           parent: BrowserWindow.fromWebContents(event.sender) || undefined,
           title: "Sign in with your phone",
           webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false,
