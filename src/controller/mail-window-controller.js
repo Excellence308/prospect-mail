@@ -3,6 +3,7 @@ const { spawn } = require("child_process");
 const settings = require("../settings");
 const getClientFile = require("./client-injector");
 const path = require("path");
+const { createPhonePasskeySupport } = require("electron-phone-passkey");
 
 let mainMailServiceUrl;
 let deeplinkUrls;
@@ -165,6 +166,7 @@ class MailWindowController {
       icon: path.join(__dirname, "../../assets/outlook_linux_black.png"),
       webPreferences: {
         contextIsolation: true,
+        nodeIntegrationInSubFrames: process.platform === "linux" && settings.get("phonePasskey.enabled") === true,
         preload: path.join(__dirname, "preload.js"),
         // Keep the injected unread observer's timers running while the window is
         // hidden to tray (hideOnClose/hideOnMinimize). Chromium throttles timers
@@ -173,6 +175,22 @@ class MailWindowController {
         backgroundThrottling: false,
       },
     });
+
+    const phonePasskey = settings.get("phonePasskey");
+    if (process.platform === "linux" && phonePasskey?.enabled) {
+      try {
+        this.phonePasskeySupport = createPhonePasskeySupport({
+          electron: require("electron"),
+          helperPath: phonePasskey.helperPath,
+          extraOrigins: phonePasskey.extraOrigins,
+        });
+        this.phonePasskeySupport.attach(this.win.webContents);
+        app.once("before-quit", () => this.phonePasskeySupport.dispose());
+      } catch {
+        // No credentials or configured paths are logged.
+        console.warn("[Passkey] Phone sign-in is unavailable; check its helper configuration.");
+      }
+    }
 
     // Set true right before a silent recovery reload so the dom-ready handler
     // doesn't re-show a hidden/background window (see reloadWindowSilently).

@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("electronAPI", {
+if (process.isMainFrame) contextBridge.exposeInMainWorld("electronAPI", {
   updateUnread: (unread) => ipcRenderer.send("updateUnread", unread),
   showWindow: () => ipcRenderer.send("show"),
   sendNotification: (notification) =>

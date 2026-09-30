@@ -240,3 +240,10 @@ coding standards, and the release process.
 [Julian Alarcon](https://desentropia.com) based on
 [electron-outlook](https://github.com/eNkru/electron-outlook) by
 [Howard J](https://enkru.github.io/)
+
+### Experimental phone passkeys
+
+An opt-in Linux QR sign-in prototype is described in
+[the phone-passkey guide](docs/phone-passkeys.md). It uses a separately built
+helper and leaves ordinary browser sessions separate. Company sign-in still
+requires interactive validation.
