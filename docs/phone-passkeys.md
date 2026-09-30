@@ -40,3 +40,7 @@ settings untouched. Ordinary launches continue to use the existing profile.
 
 See the [shared component](../vendor/electron-phone-passkey/README.md) for
 security boundaries, dependencies, build/licensing requirements and tests.
+
+The profile is selected before loading electron-store or controllers. Initial sign-in and a visible login window do not generate reauthentication notifications or recovery reloads. Background notifications are armed only after the mailbox observer finds a real inbox and are limited to once per sign-in episode, with a cooldown across recovery.
+
+Run the actual-startup regression with `./node_modules/.bin/electron scripts/phone-profile-smoke.cjs`. It uses a temporary profile, a local synthetic login page and a synthetic helper response, and waits past the login detector timer to verify that no initial sign-in notification appears.

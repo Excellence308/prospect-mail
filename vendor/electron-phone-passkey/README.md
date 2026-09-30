@@ -101,3 +101,5 @@ The Electron renderer smoke test uses synthetic assertions only (no real authent
 ```
 
 It checks isolated and non-isolated main frames and cross-origin iframes, credential prototypes, signed origin context, and absence of Node globals. Native tests require building the helper first.
+
+The local QR window has no application menu and follows the system light/dark theme. The QR stays on a white panel for camera contrast.

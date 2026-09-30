@@ -4,6 +4,7 @@ const settings = require("../settings");
 const getClientFile = require("./client-injector");
 const path = require("path");
 const { createPhonePasskeySupport } = require("electron-phone-passkey");
+const { LoginNotificationPolicy } = require("../login-notification-policy");
 
 let mainMailServiceUrl;
 let deeplinkUrls;
@@ -365,30 +366,37 @@ class MailWindowController {
     //     interactive login.
     //
     // Recovery policy (see AUTH_RECOVERY_* above):
-    //   - login-page: always just notify. A reload can't help and could wipe a
+    //   - login-page: notify only for a previously loaded mailbox in the tray.
+    //     A reload cannot help and could wipe a
     //     half-entered login form.
-    //   - session-expired while the window is focused: notify only, so a reload
+    //   - session-expired while the window is visible: stay quiet, so a reload
     //     never interrupts something the user is doing (e.g. composing a draft).
     //   - session-expired while hidden/unfocused: try one silent reload per
     //     cooldown. If the banner returns within the cooldown, the reload didn't
     //     fix it (session really gone), so notify instead of looping.
     // A stuck/blank page from a dropped connection is handled by did-fail-load.
-    ipcMain.on("report-login-required", (_event, reason) => {
-      const notify = () =>
+    const loginNotifications = new LoginNotificationPolicy();
+    const isMainCaller = (event) => event.sender === this.win.webContents &&
+      event.senderFrame === this.win.webContents.mainFrame;
+    ipcMain.on("mail-session-ready", (event) => {
+      if (isMainCaller(event)) loginNotifications.markMailboxReady();
+    });
+    ipcMain.on("report-login-required", (event, reason) => {
+      if (!isMainCaller(event) || !["login-page", "session-expired"].includes(reason)) return;
+      const visible = this.win.isVisible() && !this.win.isMinimized();
+      // Initial sign-in and an already-visible login form need no notification
+      // or recovery reload. In particular, never interrupt a phone ceremony.
+      if (!loginNotifications.hasMailSession || visible) return;
+      const notify = () => {
+        if (!loginNotifications.shouldNotify(reason, { visible })) return;
         this.showAppNotification(
           "Prospect Mail: Sign in required",
           "Outlook requires you to sign in again. Click here to open Prospect Mail."
         );
+      };
 
       if (reason !== "session-expired") {
         console.log(`[LoginRequired] Sign-in required (${reason}), notifying`);
-        notify();
-        return;
-      }
-
-      // Don't touch the window while the user is actively in it.
-      if (this.win.isFocused()) {
-        console.log("[LoginRequired] Session expired while in use, notifying");
         notify();
         return;
       }

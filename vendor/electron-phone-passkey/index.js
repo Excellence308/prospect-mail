@@ -56,12 +56,15 @@ function createPhonePasskeySupport({ electron, helperPath, extraOrigins = [] }) 
       if (!prompt) {
         prompt = new BrowserWindow({
           width: 430, height: 620, resizable: false, show: false,
+          autoHideMenuBar: true,
+          backgroundColor: electron.nativeTheme?.shouldUseDarkColors ? "#1e1f22" : "#ffffff",
           parent: BrowserWindow.fromWebContents(event.sender) || undefined,
           title: "Sign in with your phone",
           webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false,
             partition: "phone-passkey-prompt", preload: path.join(__dirname, "prompt-preload.js") },
         });
         pending.prompt = prompt;
+        prompt.setMenu(null);
         prompt.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
         prompt.webContents.on("will-navigate", (e) => e.preventDefault());
         prompt.on("closed", () => controller.abort());

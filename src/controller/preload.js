@@ -9,4 +9,5 @@ if (process.isMainFrame) contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("show-notification", { title, body, icon }),
   reportLoginRequired: (reason) =>
     ipcRenderer.send("report-login-required", reason),
+  reportMailSessionReady: () => ipcRenderer.send("mail-session-ready"),
 });
