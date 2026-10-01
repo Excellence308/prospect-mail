@@ -4,7 +4,8 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const root=__dirname;
-app.setPath('userData', fs.mkdtempSync(path.join(require('node:os').tmpdir(),'phone-passkey-smoke-')));
+const profile = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'phone-passkey-smoke-'));
+app.setPath('userData', profile);
 app.whenReady().then(async()=>{
   const {createPhonePasskeySupport}=require('..');
   const helper=path.join(root,'fixtures/fake-passkey-helper.cjs');
@@ -40,6 +41,13 @@ app.whenReady().then(async()=>{
     assert.equal(JSON.parse(Buffer.from(child.json.response.clientDataJSON,'base64url')).topOrigin,'https://login.microsoftonline.com');
   }
   support.dispose();for(const w of windows)w.destroy();
-  console.log('PASS: isolated and non-isolated main frames and iframes.');app.exit(0);
-}).catch(e=>{console.error(e);app.exit(1)});
-setTimeout(()=>{console.error('Smoke test timed out');app.exit(1)},15000);
+  console.log('PASS: isolated and non-isolated main frames and iframes.');finish(0);
+}).catch(e=>{console.error(e);finish(1)});
+const deadline = setTimeout(()=>{console.error('Smoke test timed out');finish(1)},15000);
+
+function finish(code) {
+  clearTimeout(deadline);
+  for (const win of BrowserWindow.getAllWindows()) win.destroy();
+  fs.rmSync(profile, { recursive: true, force: true });
+  app.exit(code);
+}

@@ -34,6 +34,13 @@ app.whenReady().then(async () => {
   assert.equal(await win.webContents.executeJavaScript('window.testResult'), true);
   assert.equal(notifications, 0);
   console.log('PASS: actual Prospect startup selects isolated settings, enables phone sign-in, and initial login does not notify.');
-  app.exit(0);
-}).catch(e => { console.error(e.message); app.exit(1); });
-setTimeout(() => app.exit(1), 15000);
+  finish(0);
+}).catch(e => { console.error(e.message); finish(1); });
+const deadline = setTimeout(() => finish(1), 15000);
+
+function finish(code) {
+  clearTimeout(deadline);
+  for (const win of BrowserWindow.getAllWindows()) win.destroy();
+  fs.rmSync(profile, { recursive: true, force: true });
+  app.exit(code);
+}
