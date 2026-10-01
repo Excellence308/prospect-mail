@@ -1,7 +1,6 @@
 const { ipcRenderer, contextBridge } = require("electron");
 
-// Session preloads execute before remote page scripts. The synchronous gate
-// returns no credentials and authenticates the window AND the actual frame.
+// Gate the document-start bridge using the registered window and frame origin.
 const config = ipcRenderer.sendSync("phone-passkey:config");
 
 function installPhonePasskey() {
@@ -37,7 +36,6 @@ function installPhonePasskey() {
       return originalGet(options);
     }
     if (options.signal?.aborted) throw new DOMException("Authentication was cancelled.", "AbortError");
-    // Preserve the browser's iframe Permissions Policy restrictions.
     const policy = document.permissionsPolicy || document.featurePolicy;
     if (window !== window.top && (!policy || !policy.allowsFeature("publickey-credentials-get"))) {
       throw new DOMException("Passkeys are not allowed in this frame.", "NotAllowedError");
@@ -93,7 +91,7 @@ if (config?.enabled) {
     contextBridge.exposeInMainWorld("phonePasskey", api);
     contextBridge.executeInMainWorld({ func: installPhonePasskey });
   } else {
-    // Teams currently uses a non-isolated preload for its DOM integration.
+    // Support non-isolated consumers too; Prospect uses context isolation.
     Object.defineProperty(window, "phonePasskey", { value: api });
     installPhonePasskey();
   }

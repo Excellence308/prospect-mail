@@ -228,6 +228,11 @@ the files using:
 - Snap: `sudo snap install dist/prospect-mail_x.y.z_arch.snap --dangerous`
 - Flatpak: `flatpak install --user dist/prospect-mail_x.y.z_arch.flatpak`
 
+## Experimental phone passkeys
+
+Linux phone QR sign-in requires an external helper and is disabled by default.
+See the [setup guide](docs/phone-passkeys.md) for configuration and limitations.
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for
@@ -240,10 +245,3 @@ coding standards, and the release process.
 [Julian Alarcon](https://desentropia.com) based on
 [electron-outlook](https://github.com/eNkru/electron-outlook) by
 [Howard J](https://enkru.github.io/)
-
-### Experimental phone passkeys
-
-An opt-in Linux QR sign-in prototype is described in
-[the phone-passkey guide](docs/phone-passkeys.md). It uses a separately built
-helper and leaves ordinary browser sessions separate. Company sign-in still
-requires interactive validation.

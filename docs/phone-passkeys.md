@@ -1,18 +1,26 @@
 # Experimental phone-passkey sign-in on Linux
 
-The optional phone backend displays the QR prompt missing from Electron's
-Linux login flow. The phone's assertion returns to Prospect's own session;
-mail links still open in your configured external browser. Helium's profiles,
-closed tabs and restart history remain separate.
+Phone mode displays a QR code and returns the phone's assertion to Prospect's
+session. It requires BlueZ, a powered Bluetooth adapter, a nearby phone with an
+existing accepted passkey, and network access for the caBLE tunnel.
 
-Build the helper from this checkout:
+## Setup
+
+Download `phone-passkey-helper-0.1.0-source.tar.gz` and `SHA256SUMS` from the
+[helper v0.1.0 release](https://github.com/Excellence308/phone-passkey-helper/releases/tag/v0.1.0). The archive includes locked dependency sources.
+Install the native build requirements in the [helper README](https://github.com/Excellence308/phone-passkey-helper/blob/v0.1.0/README.md), then
+verify and build the archive:
 
 ```bash
-cargo build --release --locked --manifest-path vendor/electron-phone-passkey/native/Cargo.toml
+sha256sum -c SHA256SUMS --ignore-missing
+tar -xzf phone-passkey-helper-0.1.0-source.tar.gz
+cd phone-passkey-helper-0.1.0
+python3 scripts/verify-inputs.py
+cargo build --release --locked --offline
 ```
 
-Use the tray menu to open `settings.json`, add the following, set `helperPath`
-to the **absolute** path of the resulting executable, then restart Prospect:
+Keep `public_suffix_list.dat` next to the executable. Open `settings.json` from
+the tray menu, add the following with an absolute helper path, then restart:
 
 ```json
 {
@@ -24,23 +32,29 @@ to the **absolute** path of the resulting executable, then restart Prospect:
 }
 ```
 
-Keep `public_suffix_list.dat` next to the helper. A phone passkey already
-registered with your organisation, Bluetooth and nearby phone are required.
-An organisation's own sign-in host needs its exact HTTPS origin added to
-`extraOrigins`. No wildcards, paths or HTTP origins are accepted.
+For a federated identity provider, add its exact HTTPS origin to `extraOrigins`.
+Wildcards, paths and HTTP origins are rejected. Set `phonePasskey.enabled` to
+`false` to restore the default flow.
 
-Use `PROSPECT_MAIL_USER_DATA_DIR=/absolute/path/to/test-profile` to run a
-prototype with separate app data, leaving your installed app's cookies and
-settings untouched. Ordinary launches continue to use the existing profile.
+Passkey enrolment is unsupported. Conditional/silent requests and macOS/Windows
+authentication use Chromium. Mail links use the configured external browser.
 
-> [!IMPORTANT]
-> This is an opt-in prototype. Real tenant sign-in has not been validated.
-> Passkey enrolment is not implemented. macOS and Windows retain native
-> authentication. Disabling `phonePasskey.enabled` restores the existing flow.
+## Login notifications
 
-See the [shared component](../vendor/electron-phone-passkey/README.md) for
-security boundaries, dependencies, build/licensing requirements and tests.
+Visible login windows stay quiet. A background login-page notification requires
+a previously observed mailbox; repeated `AuthNeeded` reports can establish
+expiry without inbox DOM. Background expiry gets one recovery reload per
+cooldown, then a notification if it persists. Notices are deduplicated.
 
-The profile is selected before loading electron-store or controllers. Initial sign-in and a visible login window do not generate reauthentication notifications or recovery reloads. Background notifications are armed only after the mailbox observer finds a real inbox and are limited to once per sign-in episode, with a cooldown across recovery.
+## Testing
 
-Run the actual-startup regression with `./node_modules/.bin/electron scripts/phone-profile-smoke.cjs`. It uses a temporary profile, a local synthetic login page and a synthetic helper response, and waits past the login detector timer to verify that no initial sign-in notification appears.
+Set `PROSPECT_MAIL_USER_DATA_DIR` to an absolute test-profile path before launch.
+Run `npm test` for the unit suite and the actual-startup probe with:
+
+```sh
+./node_modules/.bin/electron scripts/phone-profile-smoke.cjs
+```
+
+The probe uses synthetic credentials and a temporary profile. See the
+[Electron bridge](../vendor/electron-phone-passkey/README.md) for its security
+boundaries, protocol and renderer tests. Native tests belong to the helper.

@@ -1,105 +1,74 @@
-# Electron phone passkeys (experimental)
+# Electron phone-passkey bridge
 
-This opt-in component routes **sign-in assertions** to a pinned build of
-[libwebauthn](https://github.com/linux-credentials/libwebauthn). It displays a
-local QR window and returns the phone's signed response to the original app.
-It does not import cookies, store passkeys, change browser profiles, or implement
-passkey enrolment. `navigator.credentials.create()` remains native.
+Linux assertion bridge used by Prospect Mail. It runs an external caBLE helper,
+displays a local QR dialog and returns WebAuthn credential JSON to the calling
+frame. Registration and conditional/silent requests use Chromium.
 
-## Build and enable
+## Integration
 
-```bash
-cargo build --release --locked --manifest-path native/Cargo.toml
-```
+Create `createPhonePasskeySupport({ electron, helperPath, extraOrigins })` in the
+main process. Use an absolute executable helper path. Call
+`attach(window.webContents)` before loading remote content and `dispose()` on
+shutdown. Disposed instances cannot be reused.
 
-Keep `native/target/release/public_suffix_list.dat` next to
-`phone-passkey-helper`. A valid system list takes precedence; the bundled
-MPL-2.0 snapshot is pinned in `native/data/SOURCE.json`. Refresh the snapshot
-with releases. The backend source revision and Rust dependencies are pinned
-in `native/Cargo.toml` and `native/Cargo.lock`.
+For phone mode, set `contextIsolation: true`, `nodeIntegration: false` and
+`nodeIntegrationInSubFrames: true`. Guard the ordinary app preload with
+`process.isMainFrame`. The session preload runs in frames but exposes assertion
+and cancellation methods only to registered windows and allowed origins. Use
+separate sessions for windows with different security preferences.
 
-Requirements: Linux, a recent Rust toolchain, libudev/dbus development libraries
-at build time, a powered Bluetooth adapter and BlueZ at runtime, phone camera,
-an existing phone passkey accepted by the relying party, and network access for
-the caBLE tunnel. The phone must be nearby. No passkey registration or changes
-to an employer's authentication policy are performed.
-
-The main process calls `createPhonePasskeySupport({ electron, helperPath,
-extraOrigins })`, then `attach(window.webContents)` **before loading any remote
-page**. Use an absolute helper path. Call `dispose()` before quitting.
-Enable `nodeIntegrationInSubFrames` only for this opt-in mode, keep
-`nodeIntegration: false`, and guard the application's ordinary preload with
-`process.isMainFrame`. The session preload exposes only credential request and
-cancellation operations. Tested remote main frames and subframes have no
-`require` or `process` globals. Do not combine windows with different security
-preferences in the same Electron session; the two apps use separate sessions.
-
-Default calling origins are the exact HTTPS Microsoft login origins. Federated
-identity providers require explicit `extraOrigins`, without paths or wildcards.
+Setup and runtime requirements are in [Prospect's guide](../../docs/phone-passkeys.md).
+The native helper source, dependencies and public suffix data live separately.
 
 ## Security boundaries
 
-- Requests are restricted to registered app WebContents and allowlisted frames.
-- Signing origin and cross-origin/top-origin metadata come from Electron's
-  frame tree. Renderer-supplied origin fields are never used.
-- The backend checks the RP ID against the origin and public suffix list.
-  Related-origin exceptions are disabled.
-- The isolated preload checks WebAuthn Permissions Policy for iframe calls.
-  The Teams integration retains its existing non-isolated renderer model.
-- Background/conditional/silent requests fall through without showing a QR.
-- Requests are bounded in size, duration and concurrency. Page aborts, window
-  destruction, renderer loss and navigation cancel the backend.
-- The helper runs without a shell; requests and responses use anonymous pipes.
-  Credential material, QR payloads, backend stderr and configured paths are not
-  logged by this component.
-- The QR window uses a separate nonpersistent session, context isolation,
-  sandboxing, no page Node integration, a restrictive CSP, and no navigation.
-- Local configuration chooses the helper executable. Treat that executable as
-  trusted authentication code; a website cannot supply its path.
-
-## Checks and limitations
-
-```bash
-node --test --test-isolation=none test/*.test.js
-cargo fmt --manifest-path native/Cargo.toml -- --check
-cargo clippy --locked --manifest-path native/Cargo.toml -- -D warnings
-```
-
-Unit tests cover bounds, exact-origin gates, fragmented protocol output,
-timeout, cancellation and helper failure. Synthetic Electron checks cover
-credential prototypes, cross-origin login frames and absence of page Node
-globals. The native helper has been checked with valid and rejected RP IDs.
-Those checks **do not prove a successful company login**. A real phone
-transaction, relying-party acceptance and post-login app behaviour still need
-interactive validation.
-
-This is an experimental local integration, not an upstream-supported feature.
-The native helper statically links an LGPL-2.1-or-later library: distribute its
-corresponding pinned source, build files, notices and materials needed to
-relink it. The JavaScript bridge and helper wrapper are MIT licensed. The
-bundled public suffix data carries its MPL-2.0 notice in the file header.
+* Electron supplies the signing origin and cross-origin top-origin metadata.
+* Registered WebContents and exact HTTPS origin allowlists gate requests.
+* The isolated preload enforces iframe WebAuthn Permissions Policy.
+* The helper validates RP IDs against the origin and public suffix list;
+  related-origin exceptions are disabled.
+* Requests are bounded in size, duration and concurrency. Abort, document
+  replacement, window destruction, renderer loss and QR cancellation stop the
+  helper. Same-document navigation preserves the request.
+* The helper receives JSON over anonymous pipes without a shell. Credential
+  data, QR payloads, stderr and configured paths are not logged.
+* The QR dialog uses an isolated, sandboxed renderer, a nonpersistent session,
+  a restrictive CSP and blocked navigation. It follows the system theme and
+  keeps the QR on a white panel.
+* Local configuration selects the helper executable. It must be trusted.
 
 ## IPC contract
 
 | Channel | Direction | Purpose |
 | --- | --- | --- |
-| `phone-passkey:config` | renderer → main, synchronous | Credential-free document-start feature gate |
-| `phone-passkey:get` | renderer → main, invoke | Bounded assertion request; returns IDL credential JSON or a DOM error |
-| `phone-passkey:cancel` | renderer → main | Cancel the same frame's active request by ID |
-| `phone-passkey:prompt-cancel` | local prompt → main | Cancel the request belonging to that prompt |
-| `phone-passkey:qr` | main → local prompt | QR SVG and validated sign-in origin |
+| `phone-passkey:config` | renderer → main, synchronous | Document-start feature gate |
+| `phone-passkey:get` | renderer → main, invoke | Assertion request; returns credential JSON or a DOM error |
+| `phone-passkey:cancel` | renderer → main | Cancel the same frame's request by ID |
+| `phone-passkey:prompt-cancel` | local prompt → main | Cancel that prompt's request |
+| `phone-passkey:qr` | main → local prompt | QR SVG and signing origin |
 
-The native helper consumes one `{origin, topOrigin?, publicKey}` JSON object on
-stdin and emits newline-delimited `{type: "qr", svg}`, followed by exactly one
-`{type: "result", credential}` or `{type: "error", name, message}`. `validateOnly`
-is a native diagnostic mode used by tests; it is not exposed to remote pages.
+The helper reads one `{origin, topOrigin?, publicKey}` JSON object until stdin
+EOF. It emits newline-delimited `{type:"qr",svg}`, then one
+`{type:"result",credential}` or `{type:"error",name,message}`. `validateOnly` is a
+native test diagnostic and is not exposed to remote pages.
 
-The Electron renderer smoke test uses synthetic assertions only (no real authentication). Run it with the consuming application's Electron executable:
+## Tests
+
+Run `npm test` in Prospect for the consuming app and bridge unit tests. From the
+app directory, run the renderer probe with:
 
 ```sh
 ./node_modules/.bin/electron vendor/electron-phone-passkey/scripts/renderer-smoke.cjs
 ```
 
-It checks isolated and non-isolated main frames and cross-origin iframes, credential prototypes, signed origin context, and absence of Node globals. Native tests require building the helper first.
+It checks credential prototypes, frame origins and absence of page Node globals
+with synthetic assertions in isolated/non-isolated main frames and iframes.
+Native protocol tests live with the helper. These probes do not perform a real
+phone transaction.
 
-The local QR window has no application menu and follows the system light/dark theme. The QR stays on a white panel for camera contrast.
+## Licensing
+
+The bridge and helper wrapper are MIT licensed. The native helper statically
+links LGPL-2.1-or-later libwebauthn; binary distribution must preserve its pinned
+source, build files, notices and relink materials. Public suffix data retains
+its MPL-2.0 notice in the helper source.

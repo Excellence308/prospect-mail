@@ -186,6 +186,12 @@
     },
     "dmg": {
       "writeUpdateInfo": false
-    }
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "assets/**/*",
+      "LICENSE"
+    ]
   }
 }

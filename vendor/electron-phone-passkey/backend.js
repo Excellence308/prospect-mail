@@ -21,7 +21,7 @@ function runBackend({ helperPath, request, timeout, signal, onQr, spawnProcess =
     };
     if (signal?.aborted) return abort();
     try {
-      // No shell, command-line credentials, temporary files or stderr logging.
+      // Use pipes so authentication data stays out of argv and stderr logs.
       child = spawnProcess(helperPath, [], { stdio: ["pipe", "pipe", "ignore"] });
       signal?.addEventListener("abort", abort, { once: true });
       timer = setTimeout(() => fail("NotAllowedError", "Phone authentication timed out."), timeout);

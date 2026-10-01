@@ -7,13 +7,11 @@
   "files": [
     "*.js",
     "*.html",
-    "native",
     "LICENSE",
     "README.md",
-    "scripts"
+    "*.css"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "build:native": "cargo build --release --manifest-path native/Cargo.toml"
+    "test": "node --test test/*.test.js"
   }
 }

@@ -1,11 +1,9 @@
 const { app } = require("electron");
 const path = require("path");
 
-// Set the app name to use kebab-case for config directory (avoids spaces in path)
-// This must be set before app is ready
+// Select the profile before controllers initialize electron-store.
 app.setPath("userData", process.env.PROSPECT_MAIL_USER_DATA_DIR || path.join(app.getPath("appData"), "prospect-mail"));
 
-// Controllers load electron-store; select the profile before importing them.
 const MailWindowController = require("./controller/mail-window-controller");
 const TrayController = require("./controller/tray-controller");
 

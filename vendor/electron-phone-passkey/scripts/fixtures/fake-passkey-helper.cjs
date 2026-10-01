@@ -1,4 +1,4 @@
-#!/usr/bin/node
+#!/usr/bin/env node
 let data='';process.stdin.on('data',c=>data+=c);process.stdin.on('end',()=>{
  const r=JSON.parse(data);
  const client={type:'webauthn.get',challenge:r.publicKey.challenge,origin:r.origin,crossOrigin:!!r.topOrigin};if(r.topOrigin)client.topOrigin=r.topOrigin;

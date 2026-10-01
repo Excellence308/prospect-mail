@@ -21,9 +21,10 @@ app.on('ready', () => {
       .then(c=>window.testResult=c instanceof PublicKeyCredential).catch(e=>window.testResult=e.name);
   </script>`, { headers: { 'Content-Type': 'text/html' } }));
 });
-require('../src/main');
+const packageRoot = process.env.PROSPECT_PHONE_PACKAGE_ASAR;
+require(packageRoot ? path.join(packageRoot, 'src/main.js') : '../src/main');
 app.whenReady().then(async () => {
-  const settings = require('../src/settings');
+  const settings = require(packageRoot ? path.join(packageRoot, 'src/settings.js') : '../src/settings');
   assert.equal(app.getPath('userData'), profile);
   assert.equal(settings.get('phonePasskey.enabled'), true);
   assert.equal(settings.path, path.join(profile, 'settings.json'));

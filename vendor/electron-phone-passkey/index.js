@@ -18,6 +18,8 @@ function createPhonePasskeySupport({ electron, helperPath, extraOrigins = [] }) 
   const contents = new Set();
   const sessions = new Map();
   const active = new Map();
+  const listeners = new Map();
+  let disposed = false;
 
   const context = (event) => {
     if (!contents.has(event.sender) || event.sender.isDestroyed()) throw new Error("Unregistered window.");
@@ -111,6 +113,7 @@ function createPhonePasskeySupport({ electron, helperPath, extraOrigins = [] }) 
 
   return {
     attach(webContents) {
+      if (disposed) throw new Error("Phone-passkey support has been disposed.");
       if (contents.has(webContents)) return;
       contents.add(webContents);
       const session = webContents.session;
@@ -121,18 +124,31 @@ function createPhonePasskeySupport({ electron, helperPath, extraOrigins = [] }) 
       const abortRequests = () => {
         for (const pending of active.values()) if (pending.sender === webContents) pending.controller.abort();
       };
-      webContents.on("did-start-navigation", (_event, _url, _inPlace, isMainFrame, processId, routingId) => {
+      const onNavigation = (_event, _url, inPlace, isMainFrame, processId, routingId) => {
+        // Hash/history changes keep the calling document and ceremony alive.
+        if (inPlace) return;
         for (const pending of active.values()) {
           if (pending.sender === webContents && (isMainFrame ||
               pending.frame.processId === processId && pending.frame.routingId === routingId)) pending.controller.abort();
         }
-      });
+      };
+      const onDestroyed = () => {
+        abortRequests();
+        detach(webContents);
+        contents.delete(webContents);
+      };
+      listeners.set(webContents, { onNavigation, abortRequests, onDestroyed });
+      webContents.on("did-start-navigation", onNavigation);
       webContents.on("render-process-gone", abortRequests);
-      webContents.once("destroyed", () => { abortRequests(); contents.delete(webContents); });
+      webContents.once("destroyed", onDestroyed);
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
       for (const pending of active.values()) pending.controller.abort();
+      for (const webContents of listeners.keys()) detach(webContents);
       for (const [session, id] of sessions) session.unregisterPreloadScript(id);
+      sessions.clear();
       ipcMain.removeHandler(CHANNELS.get);
       ipcMain.removeListener(CHANNELS.config, configHandler);
       ipcMain.removeListener(CHANNELS.cancel, cancelHandler);
@@ -140,6 +156,15 @@ function createPhonePasskeySupport({ electron, helperPath, extraOrigins = [] }) 
       contents.clear();
     },
   };
+
+  function detach(webContents) {
+    const attached = listeners.get(webContents);
+    if (!attached) return;
+    webContents.removeListener("did-start-navigation", attached.onNavigation);
+    webContents.removeListener("render-process-gone", attached.abortRequests);
+    webContents.removeListener("destroyed", attached.onDestroyed);
+    listeners.delete(webContents);
+  }
 }
 
 module.exports = { createPhonePasskeySupport, CHANNELS };
