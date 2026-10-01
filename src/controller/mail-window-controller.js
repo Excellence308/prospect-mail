@@ -188,7 +188,6 @@ class MailWindowController {
         this.phonePasskeySupport.attach(this.win.webContents);
         app.once("before-quit", () => this.phonePasskeySupport.dispose());
       } catch {
-        // No credentials or configured paths are logged.
         console.warn("[Passkey] Phone sign-in is unavailable; check its helper configuration.");
       }
     }
@@ -358,23 +357,9 @@ class MailWindowController {
       notification.show();
     });
 
-    // Session-expiry / sign-in handling. The renderer reports two cases:
-    //   "session-expired": OWA's data calls reject with AuthNeeded (the red
-    //     "your session has expired" banner, mail UI still rendered). One reload
-    //     usually clears it, since OWA re-runs silent SSO on a fresh load.
-    //   "login-page": a hard redirect to a Microsoft sign-in page, needing
-    //     interactive login.
-    //
-    // Recovery policy (see AUTH_RECOVERY_* above):
-    //   - login-page: notify only for a previously loaded mailbox in the tray.
-    //     A reload cannot help and could wipe a
-    //     half-entered login form.
-    //   - session-expired while the window is visible: stay quiet, so a reload
-    //     never interrupts something the user is doing (e.g. composing a draft).
-    //   - session-expired while hidden/unfocused: try one silent reload per
-    //     cooldown. If the banner returns within the cooldown, the reload didn't
-    //     fix it (session really gone), so notify instead of looping.
-    // A stuck/blank page from a dropped connection is handled by did-fail-load.
+    // Visible login stays quiet. Background login pages require a prior mailbox;
+    // repeated AuthNeeded can establish expiry without inbox DOM. Expiry gets
+    // one recovery reload per cooldown, then a notification if it persists.
     const loginNotifications = new LoginNotificationPolicy();
     const isMainCaller = (event) => event.sender === this.win.webContents &&
       event.senderFrame === this.win.webContents.mainFrame;
@@ -384,9 +369,7 @@ class MailWindowController {
     ipcMain.on("report-login-required", (event, reason) => {
       if (!isMainCaller(event) || !["login-page", "session-expired"].includes(reason)) return;
       const visible = this.win.isVisible() && !this.win.isMinimized();
-      // Initial sign-in and an already-visible login form need no notification
-      // or recovery reload. In particular, never interrupt a phone ceremony.
-      if (!loginNotifications.hasMailSession || visible) return;
+      if (visible || (!loginNotifications.hasMailSession && reason !== "session-expired")) return;
       const notify = () => {
         if (!loginNotifications.shouldNotify(reason, { visible })) return;
         this.showAppNotification(

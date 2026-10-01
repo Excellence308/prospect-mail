@@ -11,7 +11,7 @@ class LoginNotificationPolicy {
   }
 
   shouldNotify(reason, { visible, now = Date.now() }) {
-    if (!["login-page", "session-expired"].includes(reason) || !this.hasMailSession ||
+    if (!["login-page", "session-expired"].includes(reason) || (!this.hasMailSession && reason !== "session-expired") ||
         visible || this.notified || now - this.lastNotificationAt < 180000) return false;
     this.notified = true;
     this.lastNotificationAt = now;
